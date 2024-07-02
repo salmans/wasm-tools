@@ -188,6 +188,7 @@ impl<'a> DeclList<'a> {
                             Ok(())
                         }
                         ExternKind::Path(path) => f(None, path, None, WorldOrInterface::Interface),
+                        ExternKind::WorldPath(path) => f(None, path, None, WorldOrInterface::World),
                         ExternKind::Func(..) => Ok(()),
                     };
 
@@ -446,6 +447,7 @@ impl<'a> Export<'a> {
 enum ExternKind<'a> {
     Interface(Id<'a>, Vec<InterfaceItem<'a>>),
     Path(UsePath<'a>),
+    WorldPath(UsePath<'a>),
     Func(Id<'a>, Func<'a>),
 }
 
@@ -459,7 +461,15 @@ impl<'a> ExternKind<'a> {
         // clone is thrown away and the original token stream is parsed for an
         // interface. This will redo the original ID parse and the original
         // colon parse, but that shouldn't be too too bad perf-wise.
+        if tokens.eat(Token::World)? {
+            tokens.eat(Token::Whitespace)?;
+            let ret = ExternKind::WorldPath(UsePath::parse(tokens)?);
+            tokens.expect_semicolon()?;
+            return Ok(ret);
+        }
+
         let mut clone = tokens.clone();
+
         let id = parse_id(&mut clone)?;
         if clone.eat(Token::Colon)? {
             // import foo: func(...)
@@ -490,6 +500,8 @@ impl<'a> ExternKind<'a> {
             ExternKind::Interface(id, _) => id.span,
             ExternKind::Path(UsePath::Id(id)) => id.span,
             ExternKind::Path(UsePath::Package { name, .. }) => name.span,
+            ExternKind::WorldPath(UsePath::Id(id)) => id.span,
+            ExternKind::WorldPath(UsePath::Package { name, .. }) => name.span,
             ExternKind::Func(id, _) => id.span,
         }
     }

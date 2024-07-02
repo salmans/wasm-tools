@@ -249,6 +249,9 @@ pub fn validate_module<'a>(
                     let prev = ret.required_imports.insert(name, required);
                     assert!(prev.is_none());
                 }
+                Some(WorldItem::World { id: world, .. }) => {
+                    todo!("Salman")
+                }
                 Some(WorldItem::Function(_) | WorldItem::Type(_)) => {
                     bail!("import `{}` is not an interface", name)
                 }
@@ -534,6 +537,9 @@ pub fn validate_adapter_module<'a>(
                             })?;
                     let prev = ret.required_imports.insert(name.to_string(), required);
                     assert!(prev.is_none());
+                }
+                Some(WorldItem::World { id, .. }) => {
+                    todo!("Salman")
                 }
                 None | Some(WorldItem::Function(_) | WorldItem::Type(_)) => {
                     if !is_library {
@@ -841,6 +847,9 @@ fn validate_exported_item<'a>(
             }
             let prev = required_resource_funcs.insert(format!("[export]{export_name}"), map);
             assert!(prev.is_none());
+        }
+        WorldItem::World { id: interface, .. } => {
+            todo!("Salman")
         }
         // not required to have anything exported in the core wasm module
         WorldItem::Type(_) => {}

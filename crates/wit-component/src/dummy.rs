@@ -30,6 +30,9 @@ pub fn dummy_module(resolve: &Resolve, world: WorldId) -> Vec<u8> {
                     push_resource_func_imports(&mut wat, resolve, &name, *ty);
                 }
             }
+            WorldItem::World { id: import, .. } => {
+                todo!("Salman")
+            }
             WorldItem::Type(id) => {
                 push_resource_func_imports(&mut wat, resolve, "$root", *id);
             }
@@ -83,6 +86,9 @@ pub fn dummy_module(resolve: &Resolve, world: WorldId) -> Vec<u8> {
                         "(func (export \"{name}#[dtor]{resource_name}\") (param i32))"
                     ));
                 }
+            }
+            WorldItem::World { id, .. } => {
+                todo!("Salman")
             }
             WorldItem::Type(_) => {}
         }

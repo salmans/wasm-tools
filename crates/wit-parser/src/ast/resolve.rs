@@ -706,6 +706,11 @@ impl<'a> Resolver<'a> {
                     let id = self.extract_iface_from_item(&item, &name, span)?;
                     WorldKey::Interface(id)
                 }
+                ast::ExternKind::WorldPath(path) => {
+                    let (item, name, span) = self.resolve_ast_item_path(path)?;
+                    let id = self.extract_world_from_item(&item, &name, span)?;
+                    WorldKey::World(id)
+                }
             };
             let world_item = self.resolve_world_item(docs, attrs, kind)?;
             if let WorldItem::Interface { id, .. } = world_item {
@@ -752,6 +757,12 @@ impl<'a> Resolver<'a> {
                 let (item, name, span) = self.resolve_ast_item_path(path)?;
                 let id = self.extract_iface_from_item(&item, &name, span)?;
                 Ok(WorldItem::Interface { id, stability })
+            }
+            ast::ExternKind::WorldPath(path) => {
+                let stability = self.stability(attrs)?;
+                let (item, name, span) = self.resolve_ast_item_path(path)?;
+                let id = self.extract_world_from_item(&item, &name, span)?;
+                Ok(WorldItem::World { id, stability })
             }
             ast::ExternKind::Func(name, func) => {
                 let func = self.resolve_function(

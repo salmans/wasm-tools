@@ -354,6 +354,7 @@ impl WitPrinter {
                 WorldItem::Type(t) => match name {
                     WorldKey::Name(s) => types.push((s.as_str(), *t)),
                     WorldKey::Interface(_) => unreachable!(),
+                    WorldKey::World(_) => unreachable!(),
                 },
                 _ => {
                     if let WorldItem::Function(f) = import {
@@ -398,6 +399,7 @@ impl WitPrinter {
         if matches!(name, WorldKey::Name(_)) {
             self.print_docs(match item {
                 WorldItem::Interface { id, .. } => &resolve.interfaces[*id].docs,
+                WorldItem::World { id, .. } => &resolve.worlds[*id].docs,
                 WorldItem::Function(f) => &f.docs,
                 // Types are handled separately
                 WorldItem::Type(_) => unreachable!(),
@@ -412,6 +414,11 @@ impl WitPrinter {
                 self.print_name(name);
                 self.output.push_str(": ");
                 match item {
+                    WorldItem::World { id, .. } => {
+                        writeln!(self.output, "interface {{")?;
+                        self.print_world(resolve, *id)?;
+                        writeln!(self.output, "}}")?;
+                    }
                     WorldItem::Interface { id, .. } => {
                         assert!(resolve.interfaces[*id].name.is_none());
                         writeln!(self.output, "interface {{")?;
@@ -436,6 +443,15 @@ impl WitPrinter {
                 self.print_semicolon();
                 self.output.push_str("\n");
             }
+            WorldKey::World(id) => {
+                match item {
+                    WorldItem::World { id: id2, .. } => assert_eq!(id, id2),
+                    _ => unreachable!(),
+                }
+                self.print_path_to_world(resolve, *id, cur_pkg)?;
+                self.print_semicolon();
+                self.output.push_str("\n");
+            }
         }
         Ok(())
     }
@@ -456,6 +472,29 @@ impl WitPrinter {
             self.print_name(&pkg.name);
             self.output.push_str("/");
             self.print_name(iface.name.as_ref().unwrap());
+            if let Some(version) = &pkg.version {
+                self.output.push_str(&format!("@{version}"));
+            }
+        }
+        Ok(())
+    }
+
+    fn print_path_to_world(
+        &mut self,
+        resolve: &Resolve,
+        world: WorldId,
+        cur_pkg: PackageId,
+    ) -> Result<()> {
+        let world = &resolve.worlds[world];
+        if world.package == Some(cur_pkg) {
+            self.print_name(world.name.as_ref());
+        } else {
+            let pkg = &resolve.packages[world.package.unwrap()].name;
+            self.print_name(&pkg.namespace);
+            self.output.push_str(":");
+            self.print_name(&pkg.name);
+            self.output.push_str("/");
+            self.print_name(world.name.as_ref());
             if let Some(version) = &pkg.version {
                 self.output.push_str(&format!("@{version}"));
             }

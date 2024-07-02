@@ -298,6 +298,7 @@ impl WorldMetadata {
                         let prev = map.insert(name.to_string(), data);
                         assert!(prev.is_none());
                     }
+                    WorldItem::World { id, .. } => todo!("Salman"),
                     WorldItem::Type(id) => {
                         let data = TypeMetadata::extract(resolve, *id);
                         if !data.is_empty() {
@@ -341,6 +342,10 @@ impl WorldMetadata {
                     };
                     let name = resolve.name_world_key(key);
                     map.insert(name, stability.clone());
+                }
+
+                WorldKey::World(_) => {
+                    todo!("Salman")
                 }
             }
         }

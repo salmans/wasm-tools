@@ -123,6 +123,7 @@ impl<'a> ComponentWorld<'a> {
                         WorldItem::Interface { id, .. } => {
                             resolve.interfaces[*id].functions.is_empty()
                         }
+                        WorldItem::World { id, .. } => todo!("Salman"),
                         WorldItem::Type(_) => true,
                     })
             };
@@ -217,6 +218,9 @@ impl<'a> ComponentWorld<'a> {
                         add_func(func, Some(&name));
                     }
                 }
+                WorldItem::World { id, .. } => {
+                    todo!("Salman")
+                }
                 WorldItem::Type(_) => {}
             }
         }
@@ -280,10 +284,12 @@ impl<'a> ComponentWorld<'a> {
             let import_map_key = match item {
                 WorldItem::Function(_) | WorldItem::Type(_) => None,
                 WorldItem::Interface { .. } => Some(name),
+                WorldItem::World { .. } => todo!("Salman"),
             };
             let interface_id = match item {
                 WorldItem::Function(_) | WorldItem::Type(_) => None,
                 WorldItem::Interface { id, .. } => Some(*id),
+                WorldItem::World { id, .. } => todo!("Salman"),
             };
             let required = required
                 .get(import_map_key.as_deref().unwrap_or(BARE_FUNC_MODULE_NAME))
@@ -309,6 +315,9 @@ impl<'a> ComponentWorld<'a> {
                     for (_name, func) in resolve.interfaces[*id].functions.iter() {
                         interface.add_func(required, resolve, func);
                     }
+                }
+                WorldItem::World { id, .. } => {
+                    todo!("Salman")
                 }
             }
             Ok(())
@@ -347,6 +356,7 @@ impl<'a> ComponentWorld<'a> {
             log::trace!("add live world export `{}`", resolve.name_world_key(name));
             let id = match item {
                 WorldItem::Interface { id, .. } => id,
+                WorldItem::World { id, .. } => todo!("Salman"),
                 WorldItem::Function(_) | WorldItem::Type(_) => {
                     live.add_world_item(resolve, item);
                     continue;
@@ -420,6 +430,9 @@ impl<'a> ComponentWorld<'a> {
                         }
                     }
                 }
+                WorldItem::World { id, .. } => {
+                    todo!("Salman")
+                }
                 WorldItem::Type(id) => live.add_type_id(resolve, *id),
             }
         }
@@ -434,6 +447,7 @@ impl<'a> ComponentWorld<'a> {
             let id = match item {
                 WorldItem::Function(_) => continue,
                 WorldItem::Interface { id, .. } => *id,
+                WorldItem::World { id, .. } => todo!("Salman"),
                 WorldItem::Type(_) => unreachable!(),
             };
             let mut set = HashSet::new();

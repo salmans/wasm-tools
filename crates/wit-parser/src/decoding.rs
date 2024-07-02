@@ -504,6 +504,7 @@ struct WitPackageDecoder<'a> {
     types: &'a types::Types,
     foreign_packages: IndexMap<String, Package>,
     iface_to_package_index: HashMap<InterfaceId, usize>,
+    world_to_package_index: HashMap<WorldId, usize>,
     named_interfaces: HashMap<String, InterfaceId>,
 
     /// A map which tracks named resources to what their corresponding `TypeId`
@@ -527,6 +528,7 @@ impl WitPackageDecoder<'_> {
             type_map: HashMap::new(),
             foreign_packages: Default::default(),
             iface_to_package_index: Default::default(),
+            world_to_package_index: Default::default(),
             named_interfaces: Default::default(),
             resources: Default::default(),
         }
@@ -1530,23 +1532,38 @@ impl WitPackageDecoder<'_> {
         }
 
         let (_name, pkg) = self.foreign_packages.get_index(idx).unwrap();
-        let interfaces = pkg.interfaces.values().copied().chain(
-            pkg.worlds
-                .values()
-                .flat_map(|w| {
-                    let world = &self.resolve.worlds[*w];
-                    world.imports.values().chain(world.exports.values())
-                })
-                .filter_map(|item| match item {
-                    WorldItem::Interface { id, .. } => Some(*id),
-                    WorldItem::Function(_) | WorldItem::Type(_) => None,
-                }),
-        );
-        for iface in interfaces {
-            for dep in self.resolve.interface_direct_deps(iface) {
-                let dep_idx = self.iface_to_package_index[&dep];
-                if dep_idx != idx {
-                    self.visit_package(dep_idx, order);
+        let items = pkg
+            .interfaces
+            .values()
+            .copied()
+            .map(AstItem::Interface)
+            .chain(
+                pkg.worlds
+                    .values()
+                    .flat_map(|w| self.resolve.world_direct_deps(*w)),
+            );
+        for item in items {
+            match item {
+                AstItem::Interface(id) => {
+                    for dep in self.resolve.interface_direct_deps(id) {
+                        let dep_idx = self.iface_to_package_index[&dep];
+                        if dep_idx != idx {
+                            self.visit_package(dep_idx, order);
+                        }
+                    }
+                }
+                AstItem::World(id) => {
+                    for dep in self.resolve.world_direct_deps(id) {
+                        match dep {
+                            AstItem::Interface(id) => {
+                                let dep_idx = self.iface_to_package_index[&id];
+                                if dep_idx != idx {
+                                    self.visit_package(dep_idx, order);
+                                }
+                            }
+                            AstItem::World(_) => todo!("Salman"),
+                        }
+                    }
                 }
             }
         }

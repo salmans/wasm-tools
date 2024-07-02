@@ -37,6 +37,7 @@ impl LiveTypes {
     pub fn add_world_item(&mut self, resolve: &Resolve, item: &WorldItem) {
         match item {
             WorldItem::Interface { id, .. } => self.add_interface(resolve, *id),
+            WorldItem::World { id, .. } => self.add_world(resolve, *id),
             WorldItem::Function(f) => self.add_func(resolve, f),
             WorldItem::Type(t) => self.add_type_id(resolve, *t),
         }

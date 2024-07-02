@@ -617,6 +617,7 @@ impl Resolve {
                                 WorldItem::Interface { id, .. } => {
                                     *id = remap.map_interface(*id, None)?
                                 }
+                                WorldItem::World { id, .. } => *id = remap.map_world(*id, None)?,
                                 WorldItem::Type(i) => *i = remap.map_type(*i, None)?,
                             }
                             map.insert(name, item);
@@ -1048,6 +1049,10 @@ impl Resolve {
         match key {
             WorldKey::Name(s) => s.to_string(),
             WorldKey::Interface(i) => self.id_of(*i).expect("unexpected anonymous interface"),
+            WorldKey::World(i) => {
+                let world = &self.worlds[*i];
+                self.id_of_name(world.package.unwrap(), world.name.as_ref())
+            }
         }
     }
 
@@ -1089,6 +1094,26 @@ impl Resolve {
             .filter_map(move |(_name, ty)| self.type_interface_dep(*ty))
     }
 
+    /// Returns an iterator of all interfaces and worlds (wrapped in `AstItem`)
+    /// the world `id` depends on.
+    ///
+    /// Note that the returned iterator may yield the same item as a
+    /// dependency multiple times. Additionally only direct dependencies of `id`
+    /// are yielded, not transitive dependencies.    
+    pub fn world_direct_deps(&self, id: WorldId) -> impl Iterator<Item = AstItem> + '_ {
+        let world = &self.worlds[id];
+        world
+            .imports
+            .iter()
+            .chain(world.exports.iter())
+            .filter_map(move |(_name, item)| match item {
+                WorldItem::Interface { id, .. } => Some(AstItem::Interface(*id)),
+                WorldItem::World { id, .. } => Some(AstItem::World(*id)),
+                WorldItem::Function(_) => None,
+                WorldItem::Type(t) => self.type_interface_dep(*t).map(AstItem::Interface),
+            })
+    }
+
     /// Returns an iterator of all packages that the package `id` depends
     /// on.
     ///
@@ -1103,21 +1128,17 @@ impl Resolve {
 
         pkg.interfaces
             .iter()
-            .flat_map(move |(_name, id)| self.interface_direct_deps(*id))
-            .chain(pkg.worlds.iter().flat_map(move |(_name, id)| {
-                let world = &self.worlds[*id];
-                world
-                    .imports
+            .flat_map(move |(_name, id)| self.interface_direct_deps(*id).map(AstItem::Interface))
+            .chain(
+                pkg.worlds
                     .iter()
-                    .chain(world.exports.iter())
-                    .filter_map(move |(_name, item)| match item {
-                        WorldItem::Interface { id, .. } => Some(*id),
-                        WorldItem::Function(_) => None,
-                        WorldItem::Type(t) => self.type_interface_dep(*t),
-                    })
-            }))
-            .filter_map(move |iface_id| {
-                let pkg = self.interfaces[iface_id].package?;
+                    .flat_map(move |(_name, id)| self.world_direct_deps(*id)),
+            )
+            .filter_map(move |item| {
+                let pkg = match item {
+                    AstItem::Interface(id) => self.interfaces[id].package?,
+                    AstItem::World(id) => self.worlds[id].package?,
+                };
                 if pkg == id {
                     None
                 } else {
@@ -1207,7 +1228,7 @@ impl Resolve {
             for (name, item) in world.imports.iter().chain(world.exports.iter()) {
                 log::debug!("validating world item: {}", self.name_world_key(name));
                 match item {
-                    WorldItem::Interface { .. } => {}
+                    WorldItem::Interface { .. } | WorldItem::World { .. } => {}
                     WorldItem::Function(f) => {
                         assert_eq!(f.name, name.clone().unwrap_name());
                     }
@@ -1957,7 +1978,11 @@ impl Remap {
             match item {
                 WorldItem::Interface { id, stability } => {
                     let id = self.map_interface(id, Some(*span))?;
-                    self.add_world_import(resolve, world, name, id, &stability);
+                    self.add_iface_to_world_import(resolve, world, name, id, &stability);
+                }
+                WorldItem::World { id, stability } => {
+                    let id = self.map_world(id, Some(*span))?;
+                    self.add_world_to_world_import(resolve, world, name, id, &stability);
                 }
                 WorldItem::Function(mut f) => {
                     self.update_function(resolve, &mut f, Some(*span))?;
@@ -1973,7 +1998,7 @@ impl Remap {
             if let TypeDefKind::Type(Type::Id(other)) = resolve.types[*id].kind {
                 if let TypeOwner::Interface(owner) = resolve.types[other].owner {
                     let name = WorldKey::Interface(owner);
-                    self.add_world_import(
+                    self.add_iface_to_world_import(
                         resolve,
                         world,
                         name,
@@ -2006,10 +2031,11 @@ impl Remap {
                     let name = match name {
                         WorldKey::Name(name) => name,
                         WorldKey::Interface(_) => unreachable!(),
+                        WorldKey::World(_) => unreachable!(),
                     };
                     export_funcs.push((name, f, *span));
                 }
-                WorldItem::Type(_) => unreachable!(),
+                WorldItem::Type(_) | WorldItem::World { .. } => unreachable!(),
             }
         }
 
@@ -2088,6 +2114,7 @@ impl Remap {
                 WorldItem::Type(_) => unreachable!(),
                 WorldItem::Function(_) => 0,
                 WorldItem::Interface { .. } => 1,
+                WorldItem::World { .. } => 2,
             };
             rank(a).cmp(&rank(b))
         });
@@ -2104,11 +2131,53 @@ impl Remap {
             WorldKey::Interface(id) => {
                 *id = self.map_interface(*id, span)?;
             }
+            WorldKey::World(id) => {
+                *id = self.map_world(*id, span)?;
+            }
         }
         Ok(())
     }
 
-    fn add_world_import(
+    fn add_world_to_world_import(
+        &self,
+        resolve: &Resolve,
+        world: &mut World,
+        key: WorldKey,
+        id: WorldId,
+        stability: &Stability,
+    ) {
+        if world.imports.contains_key(&key) {
+            return;
+        }
+        for dep in resolve.world_direct_deps(id) {
+            match dep {
+                AstItem::Interface(id) => self.add_iface_to_world_import(
+                    resolve,
+                    world,
+                    WorldKey::Interface(id),
+                    id,
+                    stability,
+                ),
+                AstItem::World(id) => self.add_world_to_world_import(
+                    resolve,
+                    world,
+                    WorldKey::World(id),
+                    id,
+                    stability,
+                ),
+            }
+        }
+        let prev = world.imports.insert(
+            key,
+            WorldItem::World {
+                id,
+                stability: stability.clone(),
+            },
+        );
+        assert!(prev.is_none());
+    }
+
+    fn add_iface_to_world_import(
         &self,
         resolve: &Resolve,
         world: &mut World,
@@ -2120,7 +2189,13 @@ impl Remap {
             return;
         }
         for dep in resolve.interface_direct_deps(id) {
-            self.add_world_import(resolve, world, WorldKey::Interface(dep), dep, stability);
+            self.add_iface_to_world_import(
+                resolve,
+                world,
+                WorldKey::Interface(dep),
+                dep,
+                stability,
+            );
         }
         let prev = world.imports.insert(
             key,
@@ -2632,6 +2707,7 @@ impl<'a> MergeMap<'a> {
             WorldKey::Interface(id) => {
                 WorldKey::Interface(self.interface_map.get(id).copied().unwrap_or(*id))
             }
+            WorldKey::World(id) => WorldKey::World(self.world_map.get(id).copied().unwrap_or(*id)),
         }
     }
 
@@ -2658,6 +2734,11 @@ impl<'a> MergeMap<'a> {
                     }
                 }
             }
+            (WorldItem::World { id: from, .. }, WorldItem::World { id: into, .. }) => {
+                if self.world_map.get(&from) != Some(&into) {
+                    bail!("worlds are not the same");
+                }
+            }
             (WorldItem::Function(from), WorldItem::Function(into)) => {
                 let _ = (from, into);
                 // FIXME: should assert an check that `from` structurally
@@ -2671,6 +2752,7 @@ impl<'a> MergeMap<'a> {
             }
 
             (WorldItem::Interface { .. }, _)
+            | (WorldItem::World { .. }, _)
             | (WorldItem::Function(_), _)
             | (WorldItem::Type(_), _) => {
                 bail!("world items do not have the same type")

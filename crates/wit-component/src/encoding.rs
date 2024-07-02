@@ -515,7 +515,9 @@ impl<'a> EncodingState<'a> {
         for (name, item) in resolve.worlds[world].imports.iter() {
             let func = match item {
                 WorldItem::Function(f) => f,
-                WorldItem::Interface { .. } | WorldItem::Type(_) => continue,
+                WorldItem::Interface { .. } | WorldItem::World { .. } | WorldItem::Type(_) => {
+                    continue
+                }
             };
             let name = resolve.name_world_key(name);
             if !info.lowerings.contains_key(&name) {
@@ -754,6 +756,7 @@ impl<'a> EncodingState<'a> {
                 WorldItem::Interface { id, .. } => {
                     self.encode_interface_export(&export_string, module, *id)?;
                 }
+                WorldItem::World { id, .. } => todo!("Salman"),
                 WorldItem::Type(_) => unreachable!(),
             }
         }

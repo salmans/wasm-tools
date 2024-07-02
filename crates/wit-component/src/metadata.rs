@@ -370,6 +370,9 @@ impl ModuleMetadata {
                         assert!(prev.is_none());
                     }
                 }
+                WorldItem::World { id, .. } => {
+                    todo!("Salman")
+                }
                 WorldItem::Type(_) => {}
             }
         }
@@ -388,6 +391,9 @@ impl ModuleMetadata {
                         let prev = ret.export_encodings.insert(name, encoding);
                         assert!(prev.is_none());
                     }
+                }
+                WorldItem::World { id, .. } => {
+                    todo!("Salman")
                 }
                 WorldItem::Type(_) => {}
             }

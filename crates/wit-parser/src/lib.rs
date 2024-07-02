@@ -351,6 +351,8 @@ pub enum WorldKey {
     Name(String),
     /// An interface which is assigned no kebab-name.
     Interface(InterfaceId),
+    /// A world which is assigned no kebab-name.
+    World(WorldId),
 }
 
 impl From<WorldKey> for String {
@@ -358,6 +360,7 @@ impl From<WorldKey> for String {
         match key {
             WorldKey::Name(name) => name,
             WorldKey::Interface(id) => format!("interface-{}", id.index()),
+            WorldKey::World(id) => format!("world-{}", id.index()),
         }
     }
 }
@@ -369,6 +372,7 @@ impl WorldKey {
         match self {
             WorldKey::Name(name) => name,
             WorldKey::Interface(_) => panic!("expected a name, found interface"),
+            WorldKey::World(_) => panic!("expected a name, found world"),
         }
     }
 }
@@ -382,6 +386,17 @@ pub enum WorldItem {
     Interface {
         #[cfg_attr(feature = "serde", serde(serialize_with = "serialize_id"))]
         id: InterfaceId,
+        #[cfg_attr(
+            feature = "serde",
+            serde(skip_serializing_if = "Stability::is_unknown")
+        )]
+        stability: Stability,
+    },
+
+    /// A world is being imported by a world.
+    World {
+        #[cfg_attr(feature = "serde", serde(serialize_with = "serialize_id"))]
+        id: WorldId,
         #[cfg_attr(
             feature = "serde",
             serde(skip_serializing_if = "Stability::is_unknown")
@@ -403,6 +418,7 @@ impl WorldItem {
     pub fn stability<'a>(&'a self, resolve: &'a Resolve) -> &'a Stability {
         match self {
             WorldItem::Interface { stability, .. } => stability,
+            WorldItem::World { stability, .. } => stability,
             WorldItem::Function(f) => &f.stability,
             WorldItem::Type(id) => &resolve.types[*id].stability,
         }
