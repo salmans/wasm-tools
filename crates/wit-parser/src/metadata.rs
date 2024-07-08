@@ -270,6 +270,8 @@ impl WorldMetadata {
         let mut func_exports = StringMap::default();
         let mut interface_import_stability = StringMap::default();
         let mut interface_export_stability = StringMap::default();
+        let mut world_import_stability = StringMap::default();
+        let mut world_export_stability = StringMap::default();
 
         for ((key, item), import) in world
             .imports
@@ -345,7 +347,21 @@ impl WorldMetadata {
                 }
 
                 WorldKey::World(_) => {
-                    todo!("Salman")
+                    let stability = match item {
+                        WorldItem::World { stability, .. } => stability,
+                        _ => continue,
+                    };
+                    if stability.is_unknown() {
+                        continue;
+                    }
+
+                    let map = if import {
+                        &mut world_import_stability
+                    } else {
+                        &mut world_export_stability
+                    };
+                    let name = resolve.name_world_key(key);
+                    map.insert(name, stability.clone());
                 }
             }
         }

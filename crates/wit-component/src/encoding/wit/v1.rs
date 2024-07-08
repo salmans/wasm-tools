@@ -357,7 +357,10 @@ pub fn encode_world(resolve: &Resolve, world_id: WorldId) -> Result<ComponentTyp
                 ComponentTypeRef::Instance(idx)
             }
             WorldItem::World { id, .. } => {
-                todo!("Salman")
+                let component_ty = encode_world(resolve, *id)?;
+                let idx = component.outer.type_count();
+                component.outer.ty().component(&component_ty);
+                ComponentTypeRef::Component(idx)
             }
             WorldItem::Function(f) => {
                 component.interface = None;
@@ -384,15 +387,12 @@ pub fn encode_world(resolve: &Resolve, world_id: WorldId) -> Result<ComponentTyp
                 let idx = component.encode_instance(*id)?;
                 ComponentTypeRef::Instance(idx)
             }
-            WorldItem::World { id, .. } => {
-                todo!("Salman")
-            }
             WorldItem::Function(f) => {
                 component.interface = None;
                 let idx = component.encode_func_type(resolve, f)?;
                 ComponentTypeRef::Func(idx)
             }
-            WorldItem::Type(_) => unreachable!(),
+            WorldItem::Type(_) | WorldItem::World { .. } => unreachable!(),
         };
         component.outer.export(&name, ty);
     }
